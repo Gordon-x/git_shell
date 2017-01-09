@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# 获取当前脚本绝对路径；
+basepath=$(cd `dirname $0`; pwd)
+
+# 获取配置文件
+conf=$(ls ${basepath} | grep -oP "\w+\.ini" | tr -d "\n")
+
+function __gordon_complete(){
+
+    COMPREPLY=()
+
+    local opts
+
+    local reply
+
+    # 获取远程仓库配置文件目录名
+    local repoConf=$(sed -n "/\[sh\]/,/\[.*\]/p" ${basepath}/${conf} | grep -v "\[.*\]" | grep repoConfPath | awk -F'=' '{print $2}' | tr -d '\n')
+
+    local existRepoConfPath=$(ls ${basepath} | grep ${repoConf})
+
+    local repoConfName=$(ls ${basepath}/${repoConf} | grep -oP "\w+(?=\.ini)")
+
+    reply=${repoConfName/"\n"/\ }
+
+    opts="init ${reply}"
+
+    case "$COMP_CWORD" in
+        0)
+            ;;
+        1)
+            COMPREPLY=( $( compgen -W "$opts" -- "${COMP_WORDS[COMP_CWORD]}" ) )
+            ;;
+        2|*)
+    esac
+}
+
+complete -F __gordon_complete -A file o

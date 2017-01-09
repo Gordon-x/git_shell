@@ -1,0 +1,91 @@
+#!/bin/sh
+
+setup(){
+
+    # 查找配置文件
+    local conf=$(ls | grep -oP "\w+\.ini" | tr -d "\n")
+    if [ ! "${conf}" ]; then
+        echo "配置文件不存在"
+        exit
+    fi
+
+    if [ ! -e jenkins_cli ]; then
+        echo '自动构建脚本不存在'
+        exit
+    fi
+
+    if [ ! -e o ]; then
+        echo 'git脚本不存在'
+        exit
+    fi
+
+    if [ ! -e gordon_complete ]; then
+        echo '自动补全脚本不存在'
+        exit
+    fi
+
+    local jenkins=$(sed -n "/\[jenkins\]/,/\[.*\]/p" ./${conf} | grep -v "\[.*\]")
+
+    local cli=$(echo $jenkins | grep jenkins-cli | awk -F'=' '{print $2}' | tr -d "\n")
+    # 检查jenkins-cli文件；
+    local jar=$(ls | grep ${cli} | tr -d "\n")
+    if [ ! "$jar" ]; then
+        echo "${cli}不存在"
+        exit
+    fi
+
+    local shFile=$(sed -n "/\[sh\]/,/\[.*\]/p" ./${conf} | grep -v "\[.*\]")
+
+    # jenkins配置文件；
+    local jenkins_conf=$(ls | grep jenkins.ini | tr -d "\n")
+
+    # 获取脚本配置
+    # 执行git命令的脚本
+    local commandFile=$(echo ${shFile} | grep shell | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 启动自动补全的命令脚本
+    local bashFile=$(echo ${shFile} | grep completeBash | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 获取脚本放置目录
+    local cmd=$(echo ${shFile} | grep shPath | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 获取bashFile目录
+    local etc=$(echo ${shFile} | grep completePath | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 获取远程仓库配置文件目录名
+    local repoConf=$(echo ${shFile} | grep repoConfPath | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 获取自动补全脚本
+    local completeFile=$(echo ${shFile} | grep completeShell | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # bashFile的完整路径
+    local bashrc=${etc}/${bashFile}
+
+    # 获取远程仓库配置文件目录路径
+    local repoPath=${cmd}/${repoConf}
+
+    # 获取备份文件的后缀 -- 备份自动补全的启动脚本
+    local bak=$(echo ${shFile} | grep bak | awk -F'=' '{print $2}' | tr -d '\n')
+
+    #初始话jenkins-cli配置文件；
+    local jobsfile=$(echo ${jenkins} | grep jobsfile | awk -F'=' '{print $2}' | tr -d "\n" )
+
+    #暂时不用；
+    #echo '初始化自动构建任务列表...'
+    #$(sh jenkins_cli)
+    #wait
+
+    echo '开始安装...'
+    # 开始安装
+    cp -a ./${jobsfile} ${etc} && echo "复制自动构建任务列表 './${jobsfile} --> ${etc}'------OK"
+    cp -a ./${cli} ${etc} && echo "复制自动构建库 './${cli} --> ${etc}'------OK"
+    cp -a ./${completeFile} ${cmd} && echo "复制自动补全脚本 './${completeFile} --> ${cmd}'------ OK"
+    cp -a ./${commandFile} ${cmd} && echo "复制脚本 './${commandFile} --> ${cmd}'------ OK"
+    cp -a ./${conf} ${etc} && echo "复制配置文件 './${conf} --> ${etc}' ------ OK"
+    mkdir ${repoPath} && echo "创建仓库配置目录 '${repoPath}'------ OK"
+    cd ${etc}
+    cp -a ${bashrc} ${bashrc}${bak} && echo "备份git启动文件 '${etc}/${bashrc}${bak}'------ OK"
+    echo ". ${cmd}/${completeFile}" >> ${bashrc} && echo "打开自动补全 ------ OK"
+}
+
+setup

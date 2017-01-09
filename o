@@ -1,0 +1,177 @@
+#!/bin/sh
+
+# 当前执行目录
+p=$(pwd)
+
+# 获取当前脚本绝对路径；
+basepath=$(cd `dirname $0`; pwd)
+
+# 获取配置文件
+conf=$(ls ${basepath} | grep -oP "\w+\.ini" | tr -d "\n")
+
+# git执行命令
+function commitRepo(){
+
+    # 提交的信息
+    local msg=$2
+
+    # git仓库目录
+    local repo_addr=$1/$1
+
+    # 配置文件的路径
+    local conf_path=${basepath}/${conf}
+
+    # 获取配置文件是否存在
+    local existIni=$(ls ${basepath} | grep ${conf})
+
+    if [ ! "${existIni}" ]; then
+        echo "配置文件不存在"
+        return
+    fi
+
+    # 获取git仓库的根目录
+    local repo_path=$(sed -n "/\[path\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep path | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 获取配置的作者姓名
+    local username=$(sed -n "/\[user\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep username | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 获取git仓库根目录并判断路径结尾是否有“/” 进入目录
+    local existRepoPath=$(echo ${repo_path} | grep -oP "/$" | tr -d "\n")
+    if [ "${existRepoPath}" ]; then
+        cd ${repo_path}${repo_addr}
+    else
+        cd ${repo_path}/${repo_addr}
+    fi
+
+    # 获取远程仓库名
+    local remote=$(git remote -v | grep -oP "^\w+(?=\s)" | head -n 1| tr -d "\n")
+
+    local t=$(date "+%Y-%m-%d %H:%M:%S")
+
+    echo -e '\e[41;33;1m 添加到暂存区：git add --all . \e[0m'
+    git add --all .
+    echo -e "\n"
+    echo -e '\e[41;33;1m 获取git状态：git status \e[0m'
+    git status
+
+    echo -e "\n"
+    echo -e '\e[41;33;1m 提交修改：git commit \e[0m'
+    git commit -m "修改：$username；时间：$t；信息：${msg}；提交：shell"
+    echo -e "\n"
+    echo -e "\e[41;33;1m 下拉远程仓库：（git pull ${remote} master）\e[0m"
+    git pull ${remote} master
+    echo -e "\n"
+    read -p "确认上传远程仓库（Ensure to push into remote repo） : " tmp
+    if [ ! "$tmp" ]; then
+       echo -e "\e[41;33;1m 终止上传！ \e[0m"
+       return
+    else
+        echo -e "\n"
+        echo -e "\e[41;33;1m 上传远程仓库：（git push ${remote} master）\e[0m"
+       git push ${remote}
+    fi
+
+}
+
+# 克隆仓库
+function cloneRepo(){
+
+    # 仓库地址
+    local url=$1
+
+    # 配置文件的路径
+    local conf_path=${basepath}/${conf}
+
+    # 获取git仓库的根目录
+    local repo_path=$(sed -n "/\[path\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep path | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 获取远程仓库配置文件目录名
+    local repoConf=$(sed -n "/\[sh\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep repoConfPath | awk -F'=' '{print $2}' | tr -d '\n')
+
+    # 仓库地址协议
+    local protocal=$(echo ${url} | grep -oP "^\w+(?=\:)")
+
+    # 仓库用户
+    local user=$(echo ${url} | grep -oP "(?<=\/\/)(\w+)(?=\@)")
+
+    # 仓库地址（ip）
+    local addr=$(echo ${url} | grep -oP "(?<=\@)(.+)(?=\/)")
+
+    # 仓库git名称
+    local repo=$(echo ${url} | grep -oP "(?<=\/)(\w+)(?=\.git)")
+
+    cd ${basepath}
+
+    # 检测远程仓库配置文件目录是否存在，不存在则创建
+    local existRepoConfPath=$(ls | grep ${repoConf})
+    if [ ! "${existRepoConfPath}" ]; then
+        mkdir ${basepath}/${repoConf}
+    fi
+
+    # 定义仓库配置文件目录下的配置文件绝对路径
+    local repoConf=${basepath}/${repoConf}/${repo}.ini
+
+    # 获取git仓库根目录并判断路径结尾是否有“/” 进入目录
+    local existRepoPath=$(echo ${repo_path} | grep -oP "/$" | tr -d "\n")
+    if [ "${existRepoPath}" ]; then
+        # 创建仓库目录，并进入
+        mkdir ${repo_path}${repo}
+        cd ${repo_path}${repo}
+    else
+        # 创建仓库目录，并进入
+        mkdir ${repo_path}/${repo}
+        cd ${repo_path}/${repo}
+    fi
+
+    local new_dir=$(pwd) && echo "创建仓库目录： ${new_dir} ------ 完成"
+
+    git clone ${url} && echo "克隆仓库：git clone ------ 完成"
+
+    # 进入克隆至本地的工程根目录中；
+    local project_path=$(ls | grep -oP '\w+' | tr -d '\n')
+    cd $project_path
+
+    # 获取当前的远程名
+    local remote=$(git remote -v | grep -oP '^\w+(?=\s)' | head -n 1 | tr -d '\n')
+
+    # 将远程名修改为仓库名
+    git remote rename ${remote} ${repo}
+
+    # 再次获取远程名
+    local remote=$(git remote -v | grep -oP '^\w+(?=\s)' | head -n 1 | tr -d '\n')
+
+    # 将配置输出并重定向到仓库配置文件
+    echo "[${repo}]" > $repoConf
+    echo "protocal=${protocal}" >> $repoConf
+    echo "user=${user}" >> $repoConf
+    echo "addr=${addr}" >> $repoConf
+    echo "repo_name=${repo}" >> $repoConf
+    echo "remote=${remote}" >> $repoConf
+
+    echo "创建远程配置文件：${repoConf} ------ 完成"
+    echo "Complete! "
+}
+
+exe(){
+    # 参数1：
+    # init 克隆仓库
+    # * 远程名
+    #
+    # 参数2：
+    #   参数1传入init时，$2为仓库地址；
+    #   * 提交信息
+    #
+    case $1 in
+    init)
+        cloneRepo $2
+        ;;
+    *)
+        commitRepo $1 $2
+        ;;
+    esac
+
+    #执行完脚本回到初始目录
+    cd ${p}
+}
+
+exe $1 $2

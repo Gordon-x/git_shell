@@ -1,0 +1,62 @@
+#!/bin/sh
+
+# 获取当前脚本绝对路径；
+basepath=$(cd `dirname $0`; pwd)
+
+# 获取配置文件
+conf=$(ls ${basepath} | grep -oP "\w+\.ini" | tr -d "\n")
+
+getJob(){
+
+    # 配置文件路径
+    local conf_path=${basepath}/${conf}
+
+    # 获取配置文件路径；
+    local cliToPath=$(sed -n "/\[sh\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep completePath | awk -F'=' '{print $2}' | tr -d "\n")
+
+    # 获取jenkins脚本名称；
+    local cli=$(sed -n "/\[jenkins\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep  jenkins-cli | awk -F'=' '{print $2}' | tr -d "\n")
+
+    # 获取jenkins地址
+    local url=$(sed -n "/\[jenkins\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep url | awk -F'=' '{print $2}' | tr -d "\n" )
+
+    local keyPath=$(sed -n "/\[jenkins\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep pem_path | awk -F'=' '{print $2}' | tr -d "\n" )
+
+    local id_rsa=$(sed -n "/\[jenkins\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep private | awk -F'=' '{print $2}' | tr -d "\n" )
+
+    local jobsfile=$(sed -n "/\[jenkins\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep jobsfile | awk -F'=' '{print $2}' | tr -d "\n" )
+
+    local cliPath
+
+    if [ ! -e ${cli} ];then
+        cliPath=${cliToPath}
+    else
+        cliPath=${basepath}
+    fi
+
+    local totalJobs=$(java -jar ${cliPath}/${cli} -s ${url} list-jobs)
+    local totalJobsNum=$(echo ${totalJobs} | sed 's/ /\n/g' | wc -l)
+
+
+    if [ ! -e ${jobsfile} ]; then
+        touch ${jobsfile}
+    fi
+
+    for((i=1;i<=${totalJobsNum};i++))
+    do
+        local job=$(echo ${totalJobs} | sed 's/ /\n/g' | sed -n ${i}',1p' | tr -d "\n")
+        echo $job
+        wait
+        local git=$(java -jar ${cliPath}/${cli} -s ${url} get-job ${job} | grep -oP '(?<=\/)[\w\-]+(?=\.git)' | tr -d "\n")
+        echo $git
+        wait
+
+        if [ "${git}" ]; then
+            local existJob=$(cat ${jobsfile} | grep "${job}")
+
+            test ${existJob} && cat ${jobsfile} | sed "s/${existJob}/${git}=${job}/g" > $jobsfile || echo "${git}=${job}" >> $jobsfile
+        fi
+    done
+}
+
+getJob
