@@ -62,7 +62,7 @@ function commitRepo(){
     git pull ${remote} master
     echo -e "\n"
     read -p "确认上传远程仓库（Ensure to push into remote repo） : " tmp
-    if [ ! "$tmp" ]; then
+    if [ "$tmp" ]; then
        echo -e "\e[41;33;1m 终止上传！ \e[0m"
        return
     else
