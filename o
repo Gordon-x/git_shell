@@ -6,6 +6,10 @@ p=$(pwd)
 # 获取当前脚本绝对路径；
 basepath=$(cd `dirname $0`; pwd)
 
+script="public.sh"
+
+. ${basepath}/${script}
+
 # 获取配置文件
 conf=$(ls ${basepath} | grep -oP "\w+\.ini" | tr -d "\n")
 
@@ -21,23 +25,20 @@ function commitRepo(){
     # 配置文件的路径
     local conf_path=${basepath}/${conf}
 
-    # 获取配置文件是否存在
-    local existIni=$(ls ${basepath} | grep ${conf})
-
-    if [ ! "${existIni}" ]; then
-        echo "配置文件不存在"
-        return
+    if [ ! -r ${conf_path} ] &> /dev/null; then
+        echo "Fatal Error: The file doesn't exist"
+        exit
     fi
 
     # 获取git仓库的根目录
-    local repo_path=$(sed -n "/\[path\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep path | awk -F'=' '{print $2}' | tr -d '\n')
+    local repo_path=$(read_conf ${conf_path} 'path' 'path')
 
     # 获取配置的作者姓名
-    local username=$(sed -n "/\[user\]/,/\[.*\]/p" ${conf_path} | grep -v "\[.*\]" | grep username | awk -F'=' '{print $2}' | tr -d '\n')
+    local username=$(read_conf ${conf_path} 'user' 'username')
 
     # 获取git仓库根目录并判断路径结尾是否有“/” 进入目录
-    local existRepoPath=$(echo ${repo_path} | grep -oP "/$" | tr -d "\n")
-    if [ "${existRepoPath}" ]; then
+    preg_match ${repo_path} '/$'
+    if [ ${?} -eq 1 ]; then
         cd ${repo_path}${repo_addr}
     else
         cd ${repo_path}/${repo_addr}
@@ -64,11 +65,11 @@ function commitRepo(){
     read -p "确认上传远程仓库（Ensure to push into remote repo） : " tmp
     if [ "$tmp" ]; then
        echo -e "\e[41;33;1m 终止上传！ \e[0m"
-       return
+       exit
     else
         echo -e "\n"
         echo -e "\e[41;33;1m 上传远程仓库：（git push ${remote} master）\e[0m"
-       git push ${remote}
+        git push ${remote}
     fi
 
 }
@@ -161,6 +162,11 @@ exe(){
     #   参数1传入init时，$2为仓库地址；
     #   * 提交信息
     #
+    if [ ! $1 ]; then
+        echo '[Usage] ';
+        exit;
+    fi
+
     case $1 in
     init)
         cloneRepo $2
